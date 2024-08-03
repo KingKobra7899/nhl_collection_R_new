@@ -109,8 +109,10 @@ get_pbp_data <- function(game_id) {
   play_data <- prep_data(play_details, columns, 1)
   play_data$is_goal <- is_goal
   play_data$shooter <- shooter
-  play_data$angle <- radians_to_degrees(get_shot_angle(play_data))
+  play_data$xCoord <- as.numeric(play_data$xCoord)
+  play_data$yCoord <- as.numeric(play_data$yCoord)
   play_data$xCoord <- flip_sign(play_data$xCoord)
+  play_data$angle <- radians_to_degrees(get_shot_angle(play_data))
   play_data$distance_from_net<- mapply(dist, play_data$xCoord, play_data$yCoord, MoreArgs = list(x2 = 89, y2 = 0))
   list <- list()
   list[["data"]] <- play_data
