@@ -88,7 +88,7 @@ get_pbp_data <- function(game_id) {
   if (is.null(pbp_data)) {
     return(NULL)
   }
-  columns <- c("xCoord", "yCoord", "shotType")
+  columns <- c("xCoord", "yCoord", "shotType", "eventOwnerTeamId")
   home = pbp_data$homeTeam$id
   away <- pbp_data$awayTeam$id
   shots_goals <- c("goal", "shot-on-goal", "missed-shot")
