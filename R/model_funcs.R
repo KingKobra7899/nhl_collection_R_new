@@ -88,57 +88,30 @@ get_pbp_data <- function(game_id) {
   if (is.null(pbp_data)) {
     return(NULL)
   }
+  columns <- c("xCoord", "yCoord", "shotType")
+  home = pbp_data$homeTeam$id
+  away <- pbp_data$awayTeam$id
+  shots_goals <- c("goal", "shot-on-goal", "missed-shot")
+  plays <- pbp_data$plays
+  plays_cleaned <- plays %>%
+    dplyr::filter(typeDescKey %in% shots_goals)
   
-  home <- as.numeric(pbp_data$homeTeam$id)
-  away <- as.numeric(pbp_data$awayTeam$id)
-  pbp <- pbp_data$plays
   
-  # Filter and process play-by-play data
-  pbp <- tryCatch({
-    pbp[!is.na(pbp$details$shotType),]
-  }, error = function(e) {
-    warning(paste("Failed to filter play-by-play data for game_id", game_id, ": ", e$message))
-    return(NULL)
-  })
+  plays_cleaned <- plays_cleaned[as.numeric(plays_cleaned$situationCode) == 1551, ]
+  play_details <- plays_cleaned$details
+  shooter <- dplyr::coalesce(play_details$scoringPlayerId, play_details$shootingPlayerId)
+  is_goal <- as.numeric(!is.na(play_details$scoringPlayerId))
+  play_data <- prep_data(play_details, columns, 1)
+  play_data$is_goal <- is_goal
+  play_data$shooter <- shooter
   
-  if (is.null(pbp)) {
-    return(NULL)
-  }
-  
-  pbp_shots <- pbp$details
-  pbp_shots$is_goal <- ifelse(is.na(pbp$details$scoringPlayerId), 0, 1)
-  pbp_shots$shot_team <- ifelse(pbp$details$eventOwnerTeamId == home, "home", "away")
-  pbp_shots$time <- pbp$timeInPeriod
-  pbp_shots$time <- sapply(pbp_shots$time, mmss_to_decimal)
-  
-  columns <- c("eventOwnerTeamId", "xCoord", "yCoord", "shotType", 
-               "shootingPlayerId", "goalieInNetId", 
-               "scoringPlayerId", "is_goal", "shot_team", "time")
-  
-  pbp_shots <- pbp_shots[, columns, drop = FALSE]
-  
-  # Add period column
-  pbp_shots$period <- pbp$periodDescriptor$number
-  pbp_shots$eventOwnerTeamId <- NULL
-  
-  period <- pbp_shots$period - 1
-  pbp_shots$time <- (pbp_shots$time + (period * 20)) * 60
-  
-  pbp_shots$xCoord <- pbp_shots$xCoord * ifelse(pbp_shots$xCoord < 0, -1, 1)
-  pbp_shots$distance <- dist(pbp_shots$xCoord, pbp_shots$yCoord, 89, 0)
-  pbp_shots <- get_shot_angle(pbp_shots)
-  
-  pbp_shots$shotType <- as.factor(pbp_shots$shotType)
-  pbp_shots$goalieInNetId <- as.factor(pbp_shots$goalieInNetId)
-  pbp_shots$shot_team <- as.factor(pbp_shots$shot_team)
-  
-  delta_t <- c(NA, diff(pbp_shots$time))
-  delta_t[1] <- pbp_shots$time[1]
-  is_rebound <- as.factor(ifelse(delta_t < 3, "yes", "no"))
-  pbp_shots$is_rebound <- is_rebound
-
-  return(pbp_shots)
+  list <- list()
+  list[["data"]] <- play_data
+  list[["homeId"]] <- home
+  list[["awayId"]] <- away
+  return(list)
 }
+
 #' @export 
 get_player_name <- function(player_id){
   url <- glue::glue("https://api-web.nhle.com/v1/player/{player_id}/landing")
