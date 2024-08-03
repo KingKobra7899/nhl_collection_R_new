@@ -1,0 +1,141 @@
+---
+title: "Developing an Expected Goals Model for the NHL"
+output: html_notebook
+---
+
+```{r}
+library(dplyr)
+library(RCurl)
+library(jsonlite)
+library(glue)
+library(ggplot2)
+library(sportyR)
+library(nhlCollection)
+library(zoo)
+library(e1071)
+library(caret)
+library(randomForest)
+library(neuralnet)
+```
+
+```{r}
+dist <- function(x1, y1, x2, y2){
+  dx = x2 - x1
+  dy = y2 - y1
+  return(sqrt((dx^2) + (dy^2)))
+}
+```
+
+```{r}
+radians_to_degrees <- function(radians) {
+  degrees <- radians * (180 / pi)
+  return(degrees)
+}
+```
+
+
+```{r}
+get_shot_angle <- function(pbp_data){
+  pbp_data <- pbp_data |> 
+    mutate(
+      angle = radians_to_degrees(atan(yCoord / (xCoord - 89)))
+    )
+  return(pbp_data)
+}
+```
+
+getting the play-by-play
+```{r}
+get_pbp_data <- function(game_id){
+url <- glue("https://api-web.nhle.com/v1/gamecenter/{game_id}/play-by-play")
+
+response <- getURL(url)
+pbp_data <- tryCatch({fromJSON(response)}, print(response))
+home <- as.numeric(pbp_data$homeTeam$id)
+away <- as.numeric(pbp_data$awayTeam$id)
+  pbp <- pbp_data$plays
+  
+  
+  
+  # Filter shots and add necessary columns
+   
+  pbp <- tryCatch({
+    # Code that may fail
+    pbp[!is.na(pbp$details$shotType),]
+  }, error = function(e) {
+    # Return NULL on error
+    NULL
+  })
+  pbp_shots <- pbp$details
+  pbp_shots$is_goal <- ifelse(is.na(pbp$details$scoringPlayerId), 0, 1)
+  pbp_shots$shot_team <- ifelse(pbp$details$eventOwnerTeamId == home, "home", "away")
+  pbp_shots$time <- pbp$timeInPeriod
+  pbp_shots$time <- sapply(pbp_shots$time, mmss_to_decimal)
+  
+  columns <- c("eventOwnerTeamId", "xCoord", "yCoord", "shotType", 
+               "shootingPlayerId", "goalieInNetId", 
+               "scoringPlayerId",  "is_goal", "shot_team", "time")
+ 
+  pbp_shots <- pbp_shots[,columns]
+  
+  # Add period column
+  pbp_shots$period <- pbp$periodDescriptor$number
+  pbp_shots$eventOwnerTeamId <- NULL
+  
+  period <- pbp_shots$period - 1
+  #print(period)
+  pbp_shots$time <- (pbp_shots$time + (period * 20)) * 60
+  
+  pbp_shots$xCoord <- pbp_shots$xCoord
+  #homeShootingWrong <- pbp_shots$xCoord > 0 & pbp_shots$shot_team == "home"
+  #awayShootingWrong <- pbp_shots$xCoord < 0 & pbp_shots$shot_team == "away"
+
+ 
+  
+
+  pbp_shots$xCoord <- pbp_shots$xCoord * ifelse(pbp_shots$xCoord < 0, -1, 1)
+  pbp_shots$distance <- dist(pbp_shots$xCoord, pbp_shots$yCoord, 89, 0)
+  pbp_shots <- get_shot_angle(pbp_shots)
+  
+  pbp_shots$shotType <- as.factor(pbp_shots$shotType)
+  pbp_shots$goalieInNetId <- as.factor(pbp_shots$goalieInNetId)
+  #pbp_shots$is_goal <- as.factor(pbp_shots$is_goal)
+  pbp_shots$shot_team <- as.factor(pbp_shots$shot_team)
+  
+  
+  return(pbp_shots)
+}
+```
+
+```{r}
+data <- fromJSON(getURL("https://api.nhle.com/stats/rest/en/game"))
+data <- data$data[data$data$season==20232024,]
+Ids <- data$id
+
+pbp_data <- get_pbp_data(Ids)
+```
+
+```{r}
+
+```
+
+```{r}
+data$shooter <- as.factor(coalesce(data$shootingPlayerId, data$scoringPlayerId))
+data$shootingPlayerId <- NULL
+data$scoringPlayerId <- NULL
+data <- na.omit(data)
+summary(data)
+```
+
+```{r}
+indices <- createDataPartition(data$is_goal, p = 0.5, list = F)
+data$is_goal <- as.numeric(data$is_goal)
+
+train <- data[indices,]
+test <- data[-indices,]
+mars.model <- nnet(is_goal ~ xCoord + yCoord + shot_type + distance + angle, train, size = 4, linout = F, maxit = 200)
+auc(test$is_goal,predict(mars.model, test))
+
+data$xGoals <- predict(mars.model, data)
+```
+
