@@ -72,6 +72,11 @@ get_shot_angle <- function(pbp_data){
     )
   return(pbp_data)
 }
+
+flip_sign <- function(x) {
+  ifelse(x < 0, -x, x)
+}
+
 #' @export 
 get_pbp_data <- function(game_id) {
   url <- glue::glue("https://api-web.nhle.com/v1/gamecenter/{game_id}/play-by-play")
@@ -104,7 +109,9 @@ get_pbp_data <- function(game_id) {
   play_data <- prep_data(play_details, columns, 1)
   play_data$is_goal <- is_goal
   play_data$shooter <- shooter
-  
+  play_data$angle <- radians_to_degrees(get_shot_angle(play_data))
+  play_data$xCoord <- flip_sign(play_data$xCoord)
+  play_data$distance_from_net<- mapply(dist, play_data$xCoord, play_data$yCoord, MoreArgs = list(x2 = 89, y2 = 0))
   list <- list()
   list[["data"]] <- play_data
   list[["homeId"]] <- home
