@@ -113,7 +113,9 @@ get_pbp_data <- function(game_id) {
   play_data$yCoord <- as.numeric(play_data$yCoord)
   play_data$xCoord <- flip_sign(play_data$xCoord)
   play_data$angle <- radians_to_degrees(get_shot_angle(play_data))
-  play_data$distance_from_net<- mapply(dist, play_data$xCoord, play_data$yCoord, MoreArgs = list(x2 = 89, y2 = 0))
+ for (i in 1:nrow(play_data)) {
+  play_data$distance_from_net[i] <- dist(play_data$xCoord[i], play_data$yCoord[i], 89, 0)
+}
   list <- list()
   list[["data"]] <- play_data
   list[["homeId"]] <- home
