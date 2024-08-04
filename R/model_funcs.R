@@ -114,7 +114,6 @@ get_pbp_data <- function(game_id) {
   play_data$xCoord <- play_data$xCoord * ifelse(play_data$xCoord < 0, -1, 1)
   play_data$distance <- dist(play_data$xCoord, play_data$yCoord, 89, 0)
   play_data$angle <- get_shot_angle(play_data)$angle
-  print(str(play_data))
  
   list <- list()
   list[["data"]] <- play_data
