@@ -111,7 +111,7 @@ get_pbp_data <- function(game_id) {
   play_data$shooter <- shooter
   play_data$xCoord <- as.numeric(play_data$xCoord)
   play_data$yCoord <- as.numeric(play_data$yCoord)
-  
+  play_data$xCoord <- flip_sign(play_data$xCoord)
   print(str(play_data))
  
   list <- list()
