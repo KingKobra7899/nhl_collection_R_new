@@ -111,7 +111,7 @@ get_pbp_data <- function(game_id) {
   play_data$shooter <- shooter
   play_data$xCoord <- as.numeric(play_data$xCoord)
   play_data$yCoord <- as.numeric(play_data$yCoord)
- play_data$xCoord <- play_data$xCoord * ifelse(play_data$xCoord < 0, -1, 1)
+  play_data$xCoord <- play_data$xCoord * ifelse(play_data$xCoord < 0, -1, 1)
   play_data$distance <- dist(play_data$xCoord, play_data$yCoord, 89, 0)
   play_data$angle <- get_shot_angle(play_data)
   print(str(play_data))
@@ -120,7 +120,7 @@ get_pbp_data <- function(game_id) {
   list[["data"]] <- play_data
   list[["homeId"]] <- home
   list[["awayId"]] <- away
-  return(list)
+  return(play_data)
 }
 
 #' @export 
