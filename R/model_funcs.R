@@ -123,6 +123,36 @@ get_pbp_data <- function(game_id) {
 }
 
 #' @export 
+get_game_data <- function(game_id, xG_model){
+game <- get_pbp_data(game_id)
+
+cols <- c( "is_goal" ,             "xCoord" ,              "yCoord"     ,         
+           "shotTypebat"   ,       "shotTypebetween.legs" ,"shotTypecradle" ,     
+           "shotTypedeflected"  ,  "shotTypepoke"  ,       "shotTypeslap"  ,      
+           "shotTypesnap"  ,       "shotTypetip.in" ,      "shotTypewrap.around",
+           "shotTypewrist",        "distance"   ,          "angle")
+
+game_data <- game$data
+game_data$shot_team <- sapply(game_data$eventOwnerTeamId, get_team_name)
+game_data$eventOwnerTeamId <- NULL
+
+proj_data <- model.matrix( ~ is_goal + xCoord + yCoord + distance + angle+ shotType, data = game_data)
+proj_data <- data.frame(proj_data)
+missing_cols <- setdiff(colnames(pbp_data), colnames(proj_data))
+proj_data[missing_cols] <- 0
+proj_data$X.Intercept. <- NULL
+
+xG <- predict(xG_model, proj_data, type = "response")
+
+game_data$xG <- xG
+
+
+game_data$shooter_name <- sapply(game_data$shooter, get_player_name)
+
+return(game_data)
+}
+
+#' @export 
 get_player_name <- function(player_id){
   url <- glue::glue("https://api-web.nhle.com/v1/player/{player_id}/landing")
   response <- RCurl::getURL(url)
