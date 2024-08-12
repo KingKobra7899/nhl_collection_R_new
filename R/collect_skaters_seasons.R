@@ -14,10 +14,24 @@ getSeasonData <- function(year, minPoints){
   data$positionCode <- as.factor(data$positionCode)
 
   data <- data[data$points > minPoints, ]
+  playerIds <- unique(data$playerId)
+  player_data <- getAllPlayerStats(playerIds)
+  print(str(player_data))
+  data <- merge(data, player_data, by = "playerId")
   return(data)
 }
 
+#' @export
+get_team_name <- function(team_id){
+  team_data <- jsonlite::fromJSON(RCurl::getURL("https://api.nhle.com/stats/rest/en/team"))$data
+  return(team_data$triCode[team_data$id==team_id])
+}
 
+#' @export
+get_team_name <- function(tricode){
+  team_data <- jsonlite::fromJSON(RCurl::getURL("https://api.nhle.com/stats/rest/en/team"))$data
+  return(team_data$id[team_data$triCode==tricode])
+}
 
 
 #' @export
@@ -213,4 +227,15 @@ normalize_vector <- function(vec) {
   }
   vector <- (vec - min_val) / (max_val - min_val)
   return(vector)
+}
+#' @export 
+get_team_schedule <- function(team, season){
+  url <- glue::glue("https://api-web.nhle.com/v1/club-schedule-season/{team}/{season}")
+  data <- jsonlite::fromJSON(RCurl::getURL(url))$games
+  return(data$id)
+}
+
+#' @export 
+get_teams <- function(){
+  return(jsonlite::fromJSON(RCurl::getURL("https://api.nhle.com/stats/rest/en/team")))
 }

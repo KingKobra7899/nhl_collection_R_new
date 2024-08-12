@@ -65,12 +65,12 @@ radians_to_degrees <- function(radians) {
   degrees <- radians * (180 / pi)
   return(degrees)
 }
-get_shot_angle <- function(pbp_data){
-  pbp_data <- pbp_data |> 
-    dplyr::mutate(
+get_shot_angle <- function(xCoord, yCoord){
+  
+    
       angle = radians_to_degrees(atan(yCoord / (xCoord - 89)))
-    )
-  return(pbp_data)
+    
+  return(angle)
 }
 
 flip_sign <- function(x) {
@@ -79,75 +79,74 @@ flip_sign <- function(x) {
 
 #' @export 
 get_pbp_data <- function(game_id) {
-  url <- glue::glue("https://api-web.nhle.com/v1/gamecenter/{game_id}/play-by-play")
+  # Efficient URL construction
+  url <- paste0("https://api-web.nhle.com/v1/gamecenter/", game_id, "/play-by-play")
   
-  # Fetch and parse the data
-  response <- RCurl::getURL(url)
+  # Use httr for faster HTTP requests
+  response <- httr::GET(url)
+  
+  # Parse JSON response
   pbp_data <- tryCatch({
-    jsonlite::fromJSON(response)
+    httr::content(response, "parsed", simplifyVector = TRUE)
   }, error = function(e) {
     warning(paste("Failed to parse JSON for game_id", game_id, ": ", e$message))
     return(NULL)
   })
   
-  if (is.null(pbp_data)) {
+  # Return early if there's no data
+  if (is.null(pbp_data) || !("plays" %in% names(pbp_data))) {
     return(NULL)
   }
-  columns <- c("xCoord", "yCoord", "shotType", "eventOwnerTeamId")
-  home = pbp_data$homeTeam$id
-  away <- pbp_data$awayTeam$id
+  
+  # Filter shots and goals in a single step
   shots_goals <- c("goal", "shot-on-goal", "missed-shot")
-  plays <- pbp_data$plays
-  plays_cleaned <- plays %>%
-    dplyr::filter(typeDescKey %in% shots_goals)
+  plays_cleaned <- dplyr::filter(pbp_data$plays, typeDescKey %in% shots_goals)
   
+  # Return early if no relevant plays
+  if (nrow(plays_cleaned) == 0) {
+    return(NULL)
+  }
   
-  plays_cleaned <- plays_cleaned[as.numeric(plays_cleaned$situationCode) == 1551, ]
+  # Efficient data preparation
   play_details <- plays_cleaned$details
-  shooter <- dplyr::coalesce(play_details$scoringPlayerId, play_details$shootingPlayerId)
-  is_goal <- as.numeric(!is.na(play_details$scoringPlayerId))
-  play_data <- prep_data(play_details, columns, 1)
-  play_data$is_goal <- is_goal
-  play_data$shooter <- shooter
-  play_data$xCoord <- as.numeric(play_data$xCoord)
-  play_data$yCoord <- as.numeric(play_data$yCoord)
-  play_data$xCoord <- play_data$xCoord * ifelse(play_data$xCoord < 0, -1, 1)
-  play_data$distance <- dist(play_data$xCoord, play_data$yCoord, 89, 0)
-  play_data$angle <- get_shot_angle(play_data)$angle
- 
-  list <- list()
-  list[["data"]] <- play_data
-  list[["homeId"]] <- home
-  list[["awayId"]] <- away
-  return(list)
+  play_details$shot_outcome <- plays_cleaned$typeDescKey
+  times <- sapply(plays_cleaned$timeInPeriod, mmss_to_decimal)
+  times <- times + (20 * (plays_cleaned$periodDescriptor$number - 1))
+  times <- times * 60
+  threshold <- 2
+
+# Calculate the difference between consecutive elements
+  time_diff <- diff(times)
+
+# Determine if each difference is within the threshold
+  is_rebound <- ifelse(time_diff <= threshold, "Yes", "No")
+
+  play_data <- dplyr::select(play_details, xCoord, yCoord, shotType, eventOwnerTeamId) %>%
+    dplyr::mutate(
+      is_goal = as.numeric(!is.na(play_details$scoringPlayerId)),
+      goalie = goalieInNetId,
+      time = times,
+      is_rebound = c("No",is_rebound),
+      shot_outcome = plays_cleaned$typeDescKey,
+      shooter = dplyr::coalesce(play_details$scoringPlayerId, play_details$shootingPlayerId),
+      xCoord = abs(as.numeric(xCoord)),
+      yCoord = as.numeric(yCoord),
+      distance = sqrt((xCoord - 89)^2 + yCoord^2),  # Inline distance calculation
+      angle = radians_to_degrees(atan(yCoord / (xCoord - 89)))
+    )
+  play_data$is_rebound <- as.integer(as.factor(play_data$is_rebound))
+  return(list(
+    data = play_data,
+    homeId = pbp_data$homeTeam$id,
+    awayId = pbp_data$awayTeam$id
+  ))
 }
 
 #' @export 
 get_game_data <- function(game_id, xG_model){
-game <- get_pbp_data(game_id)
+game_data <- get_pbp_data(game_id)$data
 
-cols <- c( "is_goal" ,             "xCoord" ,              "yCoord"     ,         
-           "shotTypebat"   ,       "shotTypebetween.legs" ,"shotTypecradle" ,     
-           "shotTypedeflected"  ,  "shotTypepoke"  ,       "shotTypeslap"  ,      
-           "shotTypesnap"  ,       "shotTypetip.in" ,      "shotTypewrap.around",
-           "shotTypewrist",        "distance"   ,          "angle")
-
-game_data <- game$data
-game_data$shot_team <- sapply(game_data$eventOwnerTeamId, get_team_name)
-game_data$eventOwnerTeamId <- NULL
-
-proj_data <- model.matrix( ~ is_goal + xCoord + yCoord + distance + angle+ shotType, data = game_data)
-proj_data <- data.frame(proj_data)
-missing_cols <- setdiff(colnames(pbp_data), colnames(proj_data))
-proj_data[missing_cols] <- 0
-proj_data$X.Intercept. <- NULL
-
-xG <- predict(xG_model, proj_data, type = "response")
-
-game_data$xG <- xG
-
-
-game_data$shooter_name <- sapply(game_data$shooter, get_player_name)
+game_data$xG <- predict(xG_model, game_data)
 
 return(game_data)
 }
@@ -164,3 +163,45 @@ get_player_name <- function(player_id){
   name <- paste(name, collapse = " ")
   return(name)
 }
+
+#'@export 
+get_player_summary <- function(model, season, id) {
+  player_log <- jsonlite::fromJSON(RCurl::getURL(glue::glue("https://api-web.nhle.com/v1/player/{id}/game-log/{season}/2")))
+  gameIds <- player_log$gameLog$gameId
+
+  all_season <- data.frame()
+  i <- 1
+  
+  for (gameid in gameIds) {
+    start_time <- Sys.time()
+    
+    tryCatch({
+      game <- get_game_data(gameid, model)
+      
+      if (id %in% game$shooter) {
+        game <- game[game$shooter == id, ]
+        
+        if (nrow(game) > 0) {
+          xG <- data.frame(x = game$xCoord, y = game$yCoord, G = game$is_goal, xG = game$xG, game_num = i)
+          all_season <- rbind(all_season, xG)
+        } else {
+          warning(glue::glue("No valid data for player {id} in game {gameid}"))
+        }
+      }
+      
+      i <- i + 1
+    }, error = function(e) {
+      message(glue::glue("Error processing game {gameid}: {e$message}"))
+      # Optionally, print the full error message:
+      # print(e)
+    })
+    
+    end_time <- Sys.time()
+    iteration_time <- end_time - start_time
+    print(iteration_time)
+  }
+  
+  return(all_season)
+}
+
+
