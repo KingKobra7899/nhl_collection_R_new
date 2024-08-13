@@ -101,7 +101,7 @@ get_pbp_data <- function(game_id) {
   # Filter shots and goals in a single step
   shots_goals <- c("goal", "shot-on-goal", "missed-shot")
   plays_cleaned <- dplyr::filter(pbp_data$plays, typeDescKey %in% shots_goals)
-  
+   plays_cleaned <- dplyr::filter(plays_cleaned, details$zoneCode %in% "O" )
   # Return early if no relevant plays
   if (nrow(plays_cleaned) == 0) {
     return(NULL)
@@ -120,11 +120,11 @@ get_pbp_data <- function(game_id) {
 
 # Determine if each difference is within the threshold
   is_rebound <- ifelse(time_diff <= threshold, "Yes", "No")
-
+  #print(str(play_details))
   play_data <- dplyr::select(play_details, xCoord, yCoord, shotType, eventOwnerTeamId) %>%
     dplyr::mutate(
       is_goal = as.numeric(!is.na(play_details$scoringPlayerId)),
-      goalie = goalieInNetId,
+      goalie = play_details$goalieInNetId,
       time = times,
       is_rebound = c("No",is_rebound),
       shot_outcome = plays_cleaned$typeDescKey,

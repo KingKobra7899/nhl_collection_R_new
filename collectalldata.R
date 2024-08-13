@@ -33,12 +33,9 @@ data$is_rebound <- as.integer(as.factor(data$is_rebound))
 data$is_goal <- as.factor(data$is_goal)
 data$is_goal <- as.integer(data$shot_outcome == "goal")
 
-split <- createDataPartition(data$is_goal, p = 0.8, list = F)
-train_data <- data[split, ]
-test_data <- data[-split, ]
 formula <- is_goal ~ xCoord + yCoord + angle + distance + is_rebound + shotType
-fitControl = trainControl(method = "repeatedcv", number = 5, repeats = 1, verboseIter = T)
-fitted_glm <- train(formula, data = train_data, method = "glm",
+fitControl = trainControl(method = "repeatedcv", number = 5, repeats = 5, verboseIter = T)
+fitted_glm <- train(formula, data = data, method = "glm",
                     preProcess = c('center', 'scale'),
                     trControl = fitControl,
                     family = "binomial",
