@@ -102,7 +102,7 @@ get_pbp_data <- function(game_id) {
   }
   
   # Filter shots and goals in a single step
-  shots_goals <- c("goal", "shot-on-goal")
+  shots_goals <- c("goal", "shot-on-goal", "missed-shot")
   plays_cleaned <- dplyr::filter(pbp_data$plays, typeDescKey %in% shots_goals)
    plays_cleaned <- dplyr::filter(plays_cleaned, details$zoneCode %in% "O" )
   # Return early if no relevant plays
@@ -235,5 +235,40 @@ get_player_summary <- function(model, season, id) {
   
   return(all_season)
 }
+
+#' @export 
+get_rapm_scores <- function(game_id, team_id, model){
+game <- get_game_data(game_id, model)
+presence <- (data.frame((game$on_ice)))
+game_data <- game$data
+url <- glue::glue("https://api.nhle.com/stats/rest/en/shiftcharts?cayenneExp=gameId={game_id}")
+response <- getURL(url)
+shift_data <- fromJSON(response)$data
+teams <- unique(shift_data$teamId)
+
+team_players <- unique(shift_data$playerId[shift_data$teamId == team_id])
+
+
+
+diff = ifelse(game_data$eventOwnerTeamId == team_id, game_data$xG, game_data$xG * -1)
+
+
+player_presence <- presence %>% select(any_of(glue("X{team_players}")))
+
+x <- player_presence
+y = diff
+
+ridge_model <- glmnet(x, y, alpha = 1)
+best_lambda <- min(ridge_model$lambda)
+rapms <- coef(ridge_model, s = best_lambda)
+rapms <- data.frame(t(as.matrix(rapms)))
+rapms$X.Intercept. <-NULL
+rapms <- t(rapms)
+rapms <- data.frame(rapms)
+rapms$player <- gsub("X", "", rownames(rapms))
+rownames(rapms) <- NULL
+return(rapms)
+}
+
 
 
