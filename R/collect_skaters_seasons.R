@@ -28,7 +28,7 @@ get_team_name <- function(team_id){
 }
 
 #' @export
-get_team_name <- function(tricode){
+get_team_id<- function(tricode){
   team_data <- jsonlite::fromJSON(RCurl::getURL("https://api.nhle.com/stats/rest/en/team"))$data
   return(team_data$id[team_data$triCode==tricode])
 }

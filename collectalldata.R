@@ -1,10 +1,12 @@
 library(nhlCollection)
 library(ModelMetrics)
 library(caret)
-data <- getURL("https://api.nhle.com/stats/rest/en/game")
-json <- fromJSON(data)$data
+response <- getURL("https://api.nhle.com/stats/rest/en/game")
+json <- fromJSON(response)$data
 
-json <- json[json$season > 200920,]
+library(RCurl)
+library(jsonlite)
+json <- json[json$season > 20072008,]
 json <- json[json$season < 20242025,]
 
 get_pbp_data(2023020018)
@@ -21,30 +23,26 @@ for(i in 1:length(ids)){
   data <- rbind(data, current)
   print(i / length(ids))
 }
-
-assess_xG_model <- function(model_name, actual, predicted){
-  auc <- auc(actual, predicted)
-  loss <- logLoss(actual, predicted)
-  return(data.frame(name = model_name, loss = loss, auc = auc))
-}
+save(data = data, file = "data/fenwick_data.rda")
 
 data <- na.omit(data)
-data$is_rebound <- as.integer(as.factor(data$is_rebound))
+data$is_rebound <- data$is_rebound - 1
 data$is_goal <- as.factor(data$is_goal)
+levels(data$is_goal) <- list("1" = "1", "No"="0")
 data$is_goal <- as.integer(data$shot_outcome == "goal")
-
+summary(data$is_goal)
 formula <- is_goal ~ xCoord + yCoord + angle + distance + is_rebound + shotType
-fitControl = trainControl(method = "repeatedcv", number = 5, repeats = 5, verboseIter = T)
+fitControl = trainControl(method = "repeatedcv", repeats = 5, number = 5, verboseIter = T)
 fitted_glm <- train(formula, data = data, method = "glm",
                     preProcess = c('center', 'scale'),
-                    trControl = fitControl,
                     family = "binomial",
-                    metric = 'Rsquared')
-summary(predict(fitted_glm, test_data))
+                    trControl = fitControl,
+                    metric = 'mae')
+summary(predict(fitted_glm, data))
 
 
-auc(test_data$is_goal, predict(fitted_glm, test_data))
-logLoss(test_data$is_goal, predict(fitted_glm, test_data))
+auc(data$is_goal, predict(fitted_glm, data))
+logLoss(data$is_goal, predict(fitted_glm, data))
 
 player <- nhlCollection::get_player_summary(fitted_glm, 20232024, 8481554)
 game <- get_pbp_data(2023021159)$data
