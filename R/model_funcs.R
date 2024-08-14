@@ -156,7 +156,7 @@ presence <- play_data
 for (player_id in players) {
   presence <- presence %>%
     rowwise() %>%
-    mutate(!!player_id := {
+    mutate(!!as.character(player_id) := {
       shifts <- shift_data %>% filter(playerId == !!player_id)
       any(sapply(1:nrow(shifts), function(i) {
         is_on_ice(time, shifts$startTime[i], shifts$endTime[i])
