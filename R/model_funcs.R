@@ -147,22 +147,30 @@ response <- getURL(url)
 shift_data <- fromJSON(response)$data
 shift_data$endTime <- (sapply(shift_data$endTime, mmss_to_decimal) * 60) + ((shift_data$period - 1) * 60)
 shift_data$startTime <- sapply(shift_data$startTime, mmss_to_decimal) * 60 + ((shift_data$period - 1) * 60)
-play_data <- get_pbp_data(game_id)$data
 players <- unique(shift_data$playerId)
 
+# Initialize presence data frame
 presence <- play_data
 
-# Loop over each player and create columns indicating their presence on ice
+# Loop over each player to create columns indicating their presence on ice and team info
 for (player_id in players) {
+  # Filter shifts and get team information for the current player
+  player_shifts <- shift_data %>% filter(playerId == player_id)
+  
+  # Extract the team ID for the current player (assuming all shifts for the player are from the same team)
+  team_id <- unique(player_shifts$teamId)
+  
+  # Add a column to the presence data frame for the player's presence on ice
   presence <- presence %>%
     rowwise() %>%
-    mutate(!!paste0("player_", player_id) := {
-      shifts <- shift_data %>% filter(playerId == !!player_id)
-      any(sapply(1:nrow(shifts), function(i) {
-        as.integer(is_on_ice(time, shifts$startTime[i], shifts$endTime[i]))
+    mutate(!!paste0("player_", player_id, "_on_ice") := {
+      any(sapply(1:nrow(player_shifts), function(i) {
+        is_on_ice(shot_time, player_shifts$startTime[i], player_shifts$endTime[i])
       }))
-    }) %>%
+    },
+    !!paste0("player_", player_id, "_team") := team_id) %>%
     ungroup()
+    print(player_id)
 }
 presence <- presence[,13:50]
   return(list(
