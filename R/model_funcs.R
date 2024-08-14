@@ -76,6 +76,9 @@ get_shot_angle <- function(xCoord, yCoord){
 flip_sign <- function(x) {
   ifelse(x < 0, -x, x)
 }
+is_on_ice <- function(shot_time, shift_start, shift_end) {
+  return(shot_time >= shift_start && shot_time <= shift_end)
+}
 
 #' @export 
 get_pbp_data <- function(game_id) {
@@ -99,7 +102,7 @@ get_pbp_data <- function(game_id) {
   }
   
   # Filter shots and goals in a single step
-  shots_goals <- c("goal", "shot-on-goal", "missed-shot")
+  shots_goals <- c("goal", "shot-on-goal")
   plays_cleaned <- dplyr::filter(pbp_data$plays, typeDescKey %in% shots_goals)
    plays_cleaned <- dplyr::filter(plays_cleaned, details$zoneCode %in% "O" )
   # Return early if no relevant plays
@@ -119,14 +122,14 @@ get_pbp_data <- function(game_id) {
   time_diff <- diff(times)
 
 # Determine if each difference is within the threshold
-  is_rebound <- ifelse(time_diff <= threshold, "Yes", "No")
+  is_rebound <- as.integer(time_diff <= threshold)
   #print(str(play_details))
   play_data <- dplyr::select(play_details, xCoord, yCoord, shotType, eventOwnerTeamId) %>%
     dplyr::mutate(
       is_goal = as.numeric(!is.na(play_details$scoringPlayerId)),
       goalie = play_details$goalieInNetId,
       time = times,
-      is_rebound = c("No",is_rebound),
+      is_rebound = c(0,is_rebound),
       shot_outcome = plays_cleaned$typeDescKey,
       shooter = dplyr::coalesce(play_details$scoringPlayerId, play_details$shootingPlayerId),
       xCoord = abs(as.numeric(xCoord)),
@@ -134,9 +137,37 @@ get_pbp_data <- function(game_id) {
       distance = sqrt((xCoord - 89)^2 + yCoord^2),  # Inline distance calculation
       angle = radians_to_degrees(atan(yCoord / (xCoord - 89)))
     )
-  play_data$is_rebound <- as.integer(as.factor(play_data$is_rebound))
+  url <- glue::glue("https://api.nhle.com/stats/rest/en/shiftcharts?cayenneExp=gameId={game_id}")
+  response <- getURL(url)
+  shift_data <- fromJSON(response)$data
+  shift_data$endTime <- (sapply(shift_data$endTime, mmss_to_decimal) * 60) + ((shift_data$period - 1) * 60)
+  shift_data$startTime <- sapply(shift_data$startTime, mmss_to_decimal) * 60 + ((shift_data$period - 1) * 60)
+  url <- glue::glue("https://api.nhle.com/stats/rest/en/shiftcharts?cayenneExp=gameId={game_id}")
+response <- getURL(url)
+shift_data <- fromJSON(response)$data
+shift_data$endTime <- (sapply(shift_data$endTime, mmss_to_decimal) * 60) + ((shift_data$period - 1) * 60)
+shift_data$startTime <- sapply(shift_data$startTime, mmss_to_decimal) * 60 + ((shift_data$period - 1) * 60)
+play_data <- get_pbp_data(game_id)$data
+players <- unique(shift_data$playerId)
+
+presence <- play_data
+
+# Loop over each player and create columns indicating their presence on ice
+for (player_id in players) {
+  presence <- presence %>%
+    rowwise() %>%
+    mutate(!!paste0("player_", player_id) := {
+      shifts <- shift_data %>% filter(playerId == !!player_id)
+      any(sapply(1:nrow(shifts), function(i) {
+        is_on_ice(time, shifts$startTime[i], shifts$endTime[i])
+      }))
+    }) %>%
+    ungroup()
+}
+presence <- presence[,13:50]
   return(list(
     data = play_data,
+    on_ice = presence,
     homeId = pbp_data$homeTeam$id,
     awayId = pbp_data$awayTeam$id
   ))
@@ -145,10 +176,11 @@ get_pbp_data <- function(game_id) {
 #' @export 
 get_game_data <- function(game_id, xG_model){
 game_data <- get_pbp_data(game_id)$data
-
+on_ice <- get_pbp_data(game_id)$on_ice
 game_data$xG <- predict(xG_model, game_data)
 
-return(game_data)
+return(list(data = game_data,
+on_ice = on_ice))
 }
 
 #' @export 
