@@ -165,10 +165,10 @@ for (player_id in players) {
     rowwise() %>%
     mutate(!!paste0("player_", player_id, "_on_ice") := {
       any(sapply(1:nrow(player_shifts), function(i) {
-        is_on_ice(shot_time, player_shifts$startTime[i], player_shifts$endTime[i])
+        is_on_ice(time, player_shifts$startTime[i], player_shifts$endTime[i])
       }))
     },
-    !!paste0("player_", player_id, "_team") := team_id) %>%
+    !!paste0("player_", player_id, "_team") := teamId) %>%
     ungroup()
     print(player_id)
 }
