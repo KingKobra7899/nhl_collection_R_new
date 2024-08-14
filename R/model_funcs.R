@@ -159,7 +159,7 @@ for (player_id in players) {
     mutate(!!paste0("player_", player_id) := {
       shifts <- shift_data %>% filter(playerId == !!player_id)
       any(sapply(1:nrow(shifts), function(i) {
-        is_on_ice(time, shifts$startTime[i], shifts$endTime[i])
+        as.integer(is_on_ice(time, shifts$startTime[i], shifts$endTime[i]))
       }))
     }) %>%
     ungroup()
