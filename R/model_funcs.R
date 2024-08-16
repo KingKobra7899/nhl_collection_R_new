@@ -175,7 +175,7 @@ get_game_data <- function(game_id, xG_model){
 game_data <- get_pbp_data(game_id)$data
 on_ice <- get_pbp_data(game_id)$on_ice
 game_data$xG <- predict(xG_model, game_data)
-
+game_data$xG[game_data$xG < 0] <- 0
 return(list(data = game_data,
 on_ice = on_ice))
 }
@@ -239,7 +239,7 @@ game <- get_game_data(game_id, model)
 presence <- (data.frame((game$on_ice)))
 game_data <- game$data
 url <- glue::glue("https://api.nhle.com/stats/rest/en/shiftcharts?cayenneExp=gameId={game_id}")
-response <- getURL(url)
+  response <- tryCatch(getURL(url), error = function(e) stop("Failed to fetch shift data"))
 shift_data <- fromJSON(response)$data
 teams <- unique(shift_data$teamId)
 
