@@ -141,7 +141,7 @@ get_pbp_data <- function(game_id) {
   url <- glue::glue("https://api.nhle.com/stats/rest/en/shiftcharts?cayenneExp=gameId={game_id}")
 response <- RCurl::getURL(url)
 shift_data <- jsonlite::fromJSON(response)$data
-print(shift_data)
+
 shift_data$endTime <- (sapply(shift_data$endTime, mmss_to_decimal) * 60) + ((shift_data$period - 1) * 60)
 shift_data$startTime <- sapply(shift_data$startTime, mmss_to_decimal) * 60 + ((shift_data$period - 1) * 60)
 players <- unique(shift_data$playerId)
