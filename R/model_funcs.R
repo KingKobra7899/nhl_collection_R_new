@@ -137,15 +137,11 @@ get_pbp_data <- function(game_id) {
       distance = sqrt((xCoord - 89)^2 + yCoord^2),  # Inline distance calculation
       angle = radians_to_degrees(atan(yCoord / (xCoord - 89)))
     )
+ 
   url <- glue::glue("https://api.nhle.com/stats/rest/en/shiftcharts?cayenneExp=gameId={game_id}")
-  response <- getURL(url)
-  shift_data <- fromJSON(response)$data
-  print(shift_data$endTime)
-  shift_data$endTime <- (sapply(shift_data$endTime, mmss_to_decimal) * 60) + ((shift_data$period - 1) * 60)
-  shift_data$startTime <- sapply(shift_data$startTime, mmss_to_decimal) * 60 + ((shift_data$period - 1) * 60)
-  url <- glue::glue("https://api.nhle.com/stats/rest/en/shiftcharts?cayenneExp=gameId={game_id}")
-response <- getURL(url)
-shift_data <- fromJSON(response)$data
+response <- RCurl::getURL(url)
+shift_data <- jsonlite::fromJSON(response)$data
+print(shift_data)
 shift_data$endTime <- (sapply(shift_data$endTime, mmss_to_decimal) * 60) + ((shift_data$period - 1) * 60)
 shift_data$startTime <- sapply(shift_data$startTime, mmss_to_decimal) * 60 + ((shift_data$period - 1) * 60)
 players <- unique(shift_data$playerId)
