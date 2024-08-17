@@ -172,8 +172,9 @@ presence <- presence[,13:50]
 
 #' @export 
 get_game_data <- function(game_id, xG_model, type){
-game_data <- get_pbp_data(game_id)$data
-on_ice <- get_pbp_data(game_id)$on_ice
+game <- get_pbp_data(game_id)
+game_data <- game$data
+on_ice <- game(game_id)$on_ice
 game_data$xG <- predict(xG_model, game_data, type = type)$yes
 game_data$xG[game_data$xG < 0] <- 0
 return(list(data = game_data,
