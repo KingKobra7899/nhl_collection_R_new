@@ -205,7 +205,7 @@ get_player_summary <- function(model, season, id) {
     start_time <- Sys.time()
     
     tryCatch({
-      game <- get_game_data(gameid, model)
+      game <- get_game_data(gameid, model, "prob")
       
       if (id %in% game$shooter) {
         game <- game[game$shooter == id, ]
@@ -235,7 +235,7 @@ get_player_summary <- function(model, season, id) {
 
 #' @export 
 get_rapm_scores <- function(game_id, team_id, model){
-game <- get_game_data(game_id, model)
+game <- get_game_data(game_id, model, "prob")
 presence <- (data.frame((game$on_ice)))
 game_data <- game$data
 url <- glue::glue("https://api.nhle.com/stats/rest/en/shiftcharts?cayenneExp=gameId={game_id}")
