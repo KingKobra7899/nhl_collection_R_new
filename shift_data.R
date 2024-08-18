@@ -8,7 +8,7 @@ train_control <- trainControl(
   classProbs = T
 )
 
-tune_grid <- expand.grid(alpha = c(0, 1), 
+tune_grid <- expand.grid(alpha = c(0, 0.5, 1), 
                          lambda = 10^-5:0) 
 data$is_goal <- as.factor(data$is_goal)
 levels(data$is_goal)[levels(data$is_goal)=="1"] = "yes"
@@ -26,12 +26,13 @@ interaction_model_sin <- train(
   metric = "ROC",  # Use "ROC" for binary classification
   trControl = trainControl(
     method = "cv",       # Cross-validation
-    number = 5,          # Number of folds
+    number = 10,          # Number of folds
     classProbs = TRUE,   # Ensure probabilities are returned
     summaryFunction = twoClassSummary,
     verboseIter = T# For ROC metric
   )
 )
+saveRDS(interaction_model_sin, file = "data/xg_model.rds")
 assess_xg <- function(model, data){
   preds <- predict(model, data, type = "prob")$yes
   data$is_goal <- as.integer(data$shot_outcome=="goal")
