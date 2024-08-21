@@ -239,3 +239,76 @@ get_team_schedule <- function(team, season){
 get_teams <- function(){
   return(jsonlite::fromJSON(RCurl::getURL("https://api.nhle.com/stats/rest/en/team")))
 }
+
+#' @export
+get_game_shift_data <- function(game_id, team_id){
+url <- glue::glue("https://api.nhle.com/stats/rest/en/shiftcharts?cayenneExp=gameId={game_id}")
+response <- RCurl::getURL(url)
+shift_data <- jsonlite::fromJSON(response)$data
+
+
+shift_data <- shift_data[shift_data$teamId==team_id,]
+shift_data$startTime <- (sapply(shift_data$startTime, mmss_to_decimal) + (20*(shift_data$period-1))) * 60 
+shift_data$endTime <- (sapply(shift_data$endTime, mmss_to_decimal)+ (20*(shift_data$period-1))) * 60
+shift_data$duration <- sapply(shift_data$duration, mmss_to_decimal) * 60
+cols <- c("id", "startTime", "endTime", "duration", "playerId", "shiftNumber")
+shift_data <- shift_data %>% select(all_of(cols))
+shift_data <- na.omit(shift_data)
+
+#View(shift_data)
+
+shifts_df <- shift_data %>% arrange(startTime)
+shifts_df <- shifts_df %>%
+  mutate(
+    shiftID = cumsum(c(TRUE, diff(startTime) > 15 | diff(endTime) > 15))
+  )
+
+wide_shifts <- shifts_df %>%
+  mutate(present = 1) %>%
+  pivot_wider(
+    names_from = playerId,
+    values_from = present,
+    values_fill = list(present = 0)  # Fill missing values with 0
+  )
+
+# Aggregate to get the earliest start time and latest end time for each group
+shifts <- wide_shifts %>%
+  group_by(shiftID) %>%
+  summarise(
+    across(where(is.numeric), max, .names = "{.col}"),
+    startTime = min(startTime),
+    endTime = max(endTime),
+    .groups = 'drop'
+  )
+return(shifts)
+}
+
+#' @export 
+get_shift_xg_data <- function(game_id, team_id, shot_data){
+shifts <- get_game_shift_data(game_id, team_id)
+shifts <- shifts[shifts$duration < 600,]
+
+shot_data$xG <- ifelse(shot_data$eventOwnerTeamId==team_id, shot_data$xG, shot_data$xG * -1)
+
+shifts <- shifts %>%
+  rowwise() %>%
+  mutate(xG = sum(shot_data$xG[shot_data$time > startTime & shot_data$time < endTime]))%>%
+  ungroup()
+shifts$xG <- shifts$xG / shifts$duration
+shifts$xG <- shifts$xG * 60 * 60
+return(shifts)
+}
+
+#'@export 
+get_rapm <- function(shift_data, team_id){
+  y <- shift_data$xG
+  x <- shift_data %>% select(all_of(starts_with("8")))
+  
+  model <- glmnet(as.matrix(x), y, weights = shift_data$duration, alpha = 1)
+  coefs <- data.frame(t(as.matrix(coef(model, s = min(model$lambda)))))
+  coefs$X.Intercept. <- NULL
+  coefs <- data.frame(t(as.matrix(coefs)))
+  coefs$player <- gsub("X", "",rownames(coefs))
+  coefs$team <- get_team_name(team_id)
+  return(coefs)
+}
