@@ -172,12 +172,12 @@ presence <- presence[,13:50]
 
 #' @export 
 get_game_data <- function(game_id, xG_model, type){
-game_data <- get_pbp_data(game_id)
-data <- game_data$data
-on_ice <- game_data$on_ice
-data$xG <- predict(xG_model, data, type = type)$yes
-
-return(list(data = data,
+game <- get_pbp_data(game_id)
+game_data <- game$data
+on_ice <- game(game_id)$on_ice
+game_data$xG <- predict(xG_model, game_data, type = type)$yes
+game_data$xG[game_data$xG < 0] <- 0
+return(list(data = game_data,
 on_ice = on_ice))
 }
 
@@ -268,27 +268,5 @@ rownames(rapms) <- NULL
 return(rapms)
 }
 
-#' @export 
-get_players_in_game <- function(game_id){
-  box_score <- jsonlite::fromJSON(RCurl::getURL(glue::glue("https://api-web.nhle.com/v1/gamecenter/{game_id}/boxscore")))
 
-  away_team <- box_score$awayTeam$id
-  home_team <- box_score$homeTeam$id
 
-  awayforwards = box_score$playerByGameStats$awayTeam$forwards$playerId
-  awaydefense = box_score$playerByGameStats$awayTeam$defense$playerId
-
-  away <- c(awayforwards, awaydefense)
-
-  homeforwards = box_score$playerByGameStats$homeTeam$forwards$playerId
-  homedefense = box_score$playerByGameStats$homeTeam$defense$playerId
-
-  home <- c(homeforwards, homedefense)
-
-  return(list(
-    away = away_team,
-    home = home_team,
-    away_players = away,
-    home_players = home
-  ))
-}

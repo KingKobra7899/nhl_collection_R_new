@@ -14,8 +14,11 @@ export(get_money_puck_skater)
 export(get_pbp_data)
 export(get_player_name)
 export(get_player_summary)
+<<<<<<< HEAD
 export(get_players_in_game)
 export(get_rapm)
+=======
+>>>>>>> parent of f5f28e5 (fixes)
 export(get_rapm_scores)
 export(get_shift_xg_data)
 export(get_team_id)
