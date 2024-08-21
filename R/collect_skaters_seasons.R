@@ -22,7 +22,7 @@ getSeasonData <- function(year, minPoints){
 }
 
 #' @export
-team_name <- function(team_id){
+get_team_name <- function(team_id){
   team_data <- jsonlite::fromJSON(RCurl::getURL("https://api.nhle.com/stats/rest/en/team"))$data
   return(team_data$triCode[team_data$id==team_id])
 }
